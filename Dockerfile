@@ -9,10 +9,10 @@ RUN set -x \
 
 FROM python:3.11-alpine
 
-ARG QL_MAINTAINER="whyour"
+ARG QL_MAINTAINER="DueGin"
 LABEL maintainer="${QL_MAINTAINER}"
 ARG QL_URL=https://github.com/${QL_MAINTAINER}/qinglong.git
-ARG QL_BRANCH=develop
+ARG QL_BRANCH=copilot/support-multi-device-login
 ARG PYTHON_SHORT_VERSION=3.11
 
 ENV QL_DIR=/ql \
@@ -57,16 +57,15 @@ RUN set -x \
   && ulimit -c 0
 
 ARG SOURCE_COMMIT
-COPY ./static /tmp/static-resources
-
 RUN git clone --depth=1 -b ${QL_BRANCH} ${QL_URL} ${QL_DIR} \
   && cd ${QL_DIR} \
   && cp -f .env.example .env \
   && chmod 777 ${QL_DIR}/shell/*.sh \
   && chmod 777 ${QL_DIR}/docker/*.sh \
+  && git clone --depth=1 https://github.com/${QL_MAINTAINER}/qinglong-static.git /static \
   && mkdir -p ${QL_DIR}/static \
-  && cp -rf /tmp/static-resources/* ${QL_DIR}/static/ \
-  && rm -rf /tmp/static-resources
+  && cp -rf /static/* ${QL_DIR}/static \
+  && rm -rf /static
 
 ENV PNPM_HOME=${QL_DIR}/data/dep_cache/node \
   PYTHON_HOME=${QL_DIR}/data/dep_cache/python3 \

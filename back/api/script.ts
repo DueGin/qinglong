@@ -29,7 +29,7 @@ export default (app: Router) => {
     celebrate({
       query: Joi.object({
         path: Joi.string().optional().allow(''),
-      }),
+      }).unknown(true),
     }),
     async (req: Request, res: Response, next: NextFunction) => {
       const logger: Logger = Container.get('logger');
@@ -80,7 +80,7 @@ export default (app: Router) => {
       query: Joi.object({
         path: Joi.string().optional().allow(''),
         file: Joi.string().required(),
-      }),
+      }).unknown(true),
     }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -101,10 +101,10 @@ export default (app: Router) => {
     celebrate({
       params: Joi.object({
         file: Joi.string().required(),
-      }),
+      }).unknown(true),
       query: Joi.object({
         path: Joi.string().optional().allow(''),
-      }),
+      }).unknown(true),
     }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -129,9 +129,8 @@ export default (app: Router) => {
         path: Joi.string().optional().allow(''),
         content: Joi.string().optional().allow(''),
         originFilename: Joi.string().optional().allow(''),
-        directory: Joi.string().optional().allow(''),
-        file: Joi.optional().allow('')
-      }),
+        directory: Joi.string().optional().allow('')
+      }).unknown(true),
     }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -203,7 +202,7 @@ export default (app: Router) => {
         filename: Joi.string().required(),
         path: Joi.string().optional().allow(''),
         content: Joi.string().required().allow(''),
-      }),
+      }).unknown(true),
     }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -235,7 +234,7 @@ export default (app: Router) => {
         filename: Joi.string().required(),
         path: Joi.string().optional().allow(''),
         type: Joi.string().optional(),
-      }),
+      }).unknown(true),
     }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -268,7 +267,7 @@ export default (app: Router) => {
       body: Joi.object({
         filename: Joi.string().required(),
         path: Joi.string().optional().allow(''),
-      }),
+      }).unknown(true),
     }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -305,7 +304,7 @@ export default (app: Router) => {
         filename: Joi.string().required(),
         content: Joi.string().optional().allow(''),
         path: Joi.string().optional().allow(''),
-      }),
+      }).unknown(true),
     }),
     async (req: Request, res: Response, next: NextFunction) => {
       const logger: Logger = Container.get('logger');
@@ -334,7 +333,7 @@ export default (app: Router) => {
         filename: Joi.string().required(),
         path: Joi.string().optional().allow(''),
         pid: Joi.number().optional().allow(''),
-      }),
+      }).unknown(true),
     }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -365,7 +364,7 @@ export default (app: Router) => {
         filename: Joi.string().required(),
         path: Joi.string().allow(''),
         newFilename: Joi.string().required(),
-      }),
+      }).unknown(true),
     }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {

@@ -2,6 +2,7 @@ import { Service, Inject } from 'typedi';
 import winston from 'winston';
 import { Connection } from 'sockjs';
 import { SockMessage } from '../data/sock';
+import { shareStore } from '../shared/store';
 
 @Service()
 export default class SockService {
@@ -27,6 +28,17 @@ export default class SockService {
   }
 
   public sendMessage(msg: SockMessage) {
+    if (msg.type === 'manuallyRunScript') {
+      shareStore.getAuthInfo().then(authInfo => {
+        const needSendClients = this.clients.filter(c => {
+          const headerToken = c.url.replace(`${c.pathname}?token=`, '');
+          return headerToken === msg.token;
+        });
+        needSendClients.forEach((x) => x.write(JSON.stringify(msg)));
+      })
+      return;
+    }
+
     this.clients.forEach((x) => {
       x.write(JSON.stringify(msg));
     });

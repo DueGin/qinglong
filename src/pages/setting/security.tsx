@@ -95,6 +95,7 @@ const SecuritySettings = ({ user, userChange }: any) => {
       });
   };
 
+  // @ts-ignore
   const onChange = (e) => {
     if (e.file && e.file.response) {
       setAvatar(`${config.apiPrefix}static/${e.file.response.data}`);

@@ -18,7 +18,7 @@ export default class ScriptService {
     private scheduleService: ScheduleService,
   ) {}
 
-  private taskCallbacks(filePath: string): TaskCallbacks {
+  private taskCallbacks(filePath: string, loginToken: string): TaskCallbacks {
     return {
       onEnd: async (cp, endTime, diff) => {
         await rmPath(filePath);
@@ -27,23 +27,25 @@ export default class ScriptService {
         this.sockService.sendMessage({
           type: 'manuallyRunScript',
           message,
+          token: loginToken
         });
       },
       onLog: async (message: string) => {
         this.sockService.sendMessage({
           type: 'manuallyRunScript',
           message,
+          token: loginToken
         });
       },
     };
   }
 
-  public async runScript(filePath: string) {
+  public async runScript(filePath: string, loginToken: string) {
     const relativePath = path.relative(config.scriptPath, filePath);
     const command = `${TASK_COMMAND} ${relativePath} now`;
     const pid = await this.scheduleService.runTask(
       `real_time=true ${command}`,
-      this.taskCallbacks(filePath),
+      this.taskCallbacks(filePath, loginToken),
       { command, id: relativePath.replace(/ /g, '-'), runOrigin: 'script' },
       'start',
     );

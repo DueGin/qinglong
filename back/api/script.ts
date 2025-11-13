@@ -1,4 +1,4 @@
-import { fileExist, readDirs, readDir, rmPath, IFile } from '../config/util';
+import {fileExist, readDirs, readDir, rmPath, IFile, getToken} from '../config/util';
 import { Router, Request, Response, NextFunction } from 'express';
 import { Container } from 'typedi';
 import { Logger } from 'winston';
@@ -310,6 +310,7 @@ export default (app: Router) => {
       const logger: Logger = Container.get('logger');
       try {
         let { filename, content, path } = req.body;
+        const loginToken = getToken(req);
         if (!path) {
           path = '';
         }
@@ -318,7 +319,7 @@ export default (app: Router) => {
         await writeFileWithLock(filePath, content || '');
 
         const scriptService = Container.get(ScriptService);
-        const result = await scriptService.runScript(filePath);
+        const result = await scriptService.runScript(filePath, loginToken);
         res.send(result);
       } catch (e) {
         return next(e);

@@ -9,6 +9,7 @@ import axios, {
   AxiosResponse,
   InternalAxiosRequestConfig,
 } from 'axios';
+import { getClientId } from './clientId';
 
 export interface IResponseData {
   code?: number;
@@ -94,6 +95,10 @@ const apiWhiteList = [
 
 _request.interceptors.request.use((_config) => {
   const token = localStorage.getItem(config.authKey);
+  // 添加 clientId 到请求头
+  const clientId = getClientId();
+  _config.headers['x-client-id'] = clientId;
+  
   if (token && !apiWhiteList.includes(_config.url!)) {
     _config.headers.Authorization = `Bearer ${token}`;
     return _config;

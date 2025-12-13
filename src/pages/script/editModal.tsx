@@ -6,7 +6,7 @@ import React, {
   useCallback,
   useReducer,
 } from 'react';
-import { Drawer, Button, Tabs, Badge, Select, TreeSelect } from 'antd';
+import { Drawer, Button, Tabs, Badge, Select, TreeSelect, Alert } from 'antd';
 import { request } from '@/utils/http';
 import config from '@/utils/config';
 import SplitPane from 'react-split-pane';
@@ -25,11 +25,13 @@ const EditModal = ({
   currentNode,
   content,
   handleCancel,
+  onSaveSuccess,
 }: {
   treeData?: any;
   content?: string;
   currentNode: any;
   handleCancel: () => void;
+  onSaveSuccess?: () => void;
 }) => {
   const [value, setValue] = useState('');
   const [language, setLanguage] = useState<string>();
@@ -43,6 +45,16 @@ const EditModal = ({
   const editorRef = useRef<any>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [currentPid, setCurrentPid] = useState(null);
+  
+  // 调试模式不需要额外的锁管理，锁已经在主页面获取
+  // 计算当前文件路径用于显示
+  const currentFilePath = cNode
+    ? ['/ql/data/scripts', cNode.parent, cNode.title]
+        .filter(Boolean)
+        .join('/')
+        .replace(/\/+/g, '/')
+    : undefined;
+  
   const cancel = () => {
     handleCancel();
   };
@@ -72,7 +84,7 @@ const EditModal = ({
       )
       .then(({ code, data }) => {
         if (code === 200) {
-          setValue(data);
+          setValue(data?.content || '');
         }
       });
   };

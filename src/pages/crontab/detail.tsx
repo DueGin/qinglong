@@ -157,7 +157,7 @@ const CronDetailModal = ({
         .get(`${config.apiPrefix}scripts/detail?file=${s}&path=${p || ''}`)
         .then(({ code, data }) => {
           if (code === 200) {
-            setValue(data);
+            setValue(data?.content || '');
           }
         });
     } else {

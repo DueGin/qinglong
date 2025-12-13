@@ -7,8 +7,12 @@ import * as fs from 'fs/promises';
 import { celebrate, Joi } from 'celebrate';
 import path, { join, parse } from 'path';
 import ScriptService from '../services/script';
+import LockService from '../services/lock';
+import SockService from '../services/sock';
 import multer from 'multer';
 import { writeFileWithLock } from '../shared/utils';
+import { SockMessage } from '../data/sock';
+import { shareStore } from '../shared/store';
 const route = Router();
 
 const storage = multer.diskStorage({
@@ -89,7 +93,31 @@ export default (app: Router) => {
           (req.query?.path as string) || '',
           req.query.file as string,
         );
-        res.send({ code: 200, data: content });
+        
+        // 获取锁状态
+        const lockService = Container.get(LockService);
+        const clientId = req.headers['x-client-id'] as string;
+        const filePath = scriptService.checkFilePath(
+          (req.query?.path as string) || '',
+          req.query.file as string,
+        );
+        
+        const lockInfo = {
+          isLocked: false,
+          isOwnLock: false,
+          lockedBy: null as string | null,
+        };
+
+        if (filePath) {
+          const lock = lockService.getLockInfo(filePath);
+          if (lock) {
+            lockInfo.lockedBy = lock.username;
+            lockInfo.isOwnLock = !!clientId && lock.clientId === clientId;
+            lockInfo.isLocked = !lockInfo.isOwnLock;
+          }
+        }
+        
+        res.send({ code: 200, data: { content, lockInfo } });
       } catch (e) {
         return next(e);
       }
@@ -143,6 +171,8 @@ export default (app: Router) => {
             directory: string;
           };
 
+        const clientRelativePath = path || '';
+
         if (!path) {
           path = config.scriptPath;
         }
@@ -177,6 +207,20 @@ export default (app: Router) => {
           `${originFilename.replace(/\//g, '')}`,
         );
         const filePath = join(path, `${filename.replace(/\//g, '')}`);
+        
+        // 锁校验
+        const clientId = req.headers['x-client-id'] as string;
+        if (clientId) {
+          const lockService = Container.get(LockService);
+          if (lockService.isLocked(filePath, clientId)) {
+            const lockInfo = lockService.getLockInfo(filePath);
+            return res.send({
+              code: 409,
+              message: `文件正在被用户 ${lockInfo?.username} 编辑，无法保存`,
+            });
+          }
+        }
+        
         const fileExists = await fileExist(filePath);
         if (fileExists) {
           await fs.copyFile(
@@ -188,6 +232,31 @@ export default (app: Router) => {
           }
         }
         await writeFileWithLock(filePath, content);
+
+        const sockService = Container.get(SockService);
+
+        // 新建文件：立即为创建者加锁并广播，避免其他端抢占编辑/调试
+        if (!fileExists && clientId) {
+          const authInfo = await shareStore.getAuthInfo();
+          const username = authInfo?.username || '';
+          const lockService = Container.get(LockService);
+          lockService.acquire(filePath, clientId, username);
+          sockService.broadcastLockStatus();
+        }
+
+        // 广播：文件内容已更新（用于其他端提示刷新）
+        const clientFilePath = ['/ql/data/scripts', clientRelativePath, filename]
+          .filter(Boolean)
+          .join('/')
+          .replace(/\/+/g, '/');
+        sockService.sendMessage(
+          new SockMessage({
+            type: 'scriptUpdated',
+            filePath: clientFilePath,
+            clientId,
+          }),
+        );
+
         return res.send({ code: 200 });
       } catch (e) {
         return next(e);
@@ -219,7 +288,36 @@ export default (app: Router) => {
             message: '暂无权限',
           });
         }
+        
+        // 锁校验
+        const clientId = req.headers['x-client-id'] as string;
+        if (clientId) {
+          const lockService = Container.get(LockService);
+          if (lockService.isLocked(filePath, clientId)) {
+            const lockInfo = lockService.getLockInfo(filePath);
+            return res.send({
+              code: 409,
+              message: `文件正在被用户 ${lockInfo?.username} 编辑，无法保存`,
+            });
+          }
+        }
+        
         await writeFileWithLock(filePath, content);
+
+        // 广播：文件内容已更新（用于其他端提示刷新）
+        const sockService = Container.get(SockService);
+        const clientFilePath = ['/ql/data/scripts', path || '', filename]
+          .filter(Boolean)
+          .join('/')
+          .replace(/\/+/g, '/');
+        sockService.sendMessage(
+          new SockMessage({
+            type: 'scriptUpdated',
+            filePath: clientFilePath,
+            clientId,
+          }),
+        );
+
         return res.send({ code: 200 });
       } catch (e) {
         return next(e);
@@ -253,7 +351,35 @@ export default (app: Router) => {
             message: '暂无权限',
           });
         }
+        
+        const clientId = req.headers['x-client-id'] as string;
+        if (clientId) {
+          const lockService = Container.get(LockService);
+          if (lockService.isLocked(filePath, clientId)) {
+            const lockInfo = lockService.getLockInfo(filePath);
+            return res.send({
+              code: 409,
+              message: `文件正在被用户 ${lockInfo?.username} 编辑，无法删除`,
+            });
+          }
+        }
         await rmPath(filePath);
+
+        // 广播：文件已被删除（用于其他端提示）
+        const sockService = Container.get(SockService);
+        const clientFilePath = ['/ql/data/scripts', path, filename]
+          .filter(Boolean)
+          .join('/')
+          .replace(/\/+/g, '/');
+
+        sockService.sendMessage(
+          new SockMessage({
+            type: 'scriptDeleted',
+            filePath: clientFilePath,
+            clientId,
+          }),
+        );
+
         res.send({ code: 200 });
       } catch (e) {
         return next(e);
@@ -316,6 +442,21 @@ export default (app: Router) => {
         }
         const { name, ext } = parse(filename);
         const filePath = join(config.scriptPath, path, `${name}.swap${ext}`);
+        
+        // 锁校验
+        const clientId = req.headers['x-client-id'] as string;
+        const originalFilePath = join(config.scriptPath, path, filename);
+        if (clientId) {
+          const lockService = Container.get(LockService);
+          if (lockService.isLocked(originalFilePath, clientId)) {
+            const lockInfo = lockService.getLockInfo(originalFilePath);
+            return res.send({
+              code: 409,
+              message: `文件正在被用户 ${lockInfo?.username} 编辑，无法运行`,
+            });
+          }
+        }
+        
         await writeFileWithLock(filePath, content || '');
 
         const scriptService = Container.get(ScriptService);
@@ -377,9 +518,50 @@ export default (app: Router) => {
         if (!path) {
           path = '';
         }
-        const filePath = join(config.scriptPath, path, filename);
+        const scriptService = Container.get(ScriptService);
+        const filePath = scriptService.checkFilePath(path, filename);
+        if (!filePath) {
+          return res.send({
+            code: 403,
+            message: '暂无权限',
+          });
+        }
         const newPath = join(config.scriptPath, path, newFilename);
+
+        const clientId = req.headers['x-client-id'] as string;
+        if (clientId) {
+          const lockService = Container.get(LockService);
+          if (lockService.isLocked(filePath, clientId)) {
+            const lockInfo = lockService.getLockInfo(filePath);
+            return res.send({
+              code: 409,
+              message: `文件正在被用户 ${lockInfo?.username} 编辑，无法重命名`,
+            });
+          }
+        }
+        
         await fs.rename(filePath, newPath);
+
+        // 广播：文件已被重命名（用于其他端提示）
+        const sockService = Container.get(SockService);
+        const oldClientFilePath = ['/ql/data/scripts', path, filename]
+          .filter(Boolean)
+          .join('/')
+          .replace(/\/+/g, '/');
+        const newClientFilePath = ['/ql/data/scripts', path, newFilename]
+          .filter(Boolean)
+          .join('/')
+          .replace(/\/+/g, '/');
+
+        sockService.sendMessage(
+          new SockMessage({
+            type: 'scriptRenamed',
+            oldFilePath: oldClientFilePath,
+            newFilePath: newClientFilePath,
+            clientId,
+          }),
+        );
+
         res.send({ code: 200 });
       } catch (e) {
         return next(e);

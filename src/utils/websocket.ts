@@ -1,5 +1,6 @@
 import SockJS from 'sockjs-client';
 import { SockMessageType } from './type';
+import { getClientId } from './clientId';
 
 class WebSocketManager {
   private static instance: WebSocketManager | null = null;
@@ -46,7 +47,12 @@ class WebSocketManager {
       this.emit('connecting');
 
       while (this.reconnectAttempts < this.options.maxReconnectAttempts) {
-        this.socket = new SockJS(this.url);
+        // 在 URL 中添加 clientId 参数
+        const clientId = getClientId();
+        const separator = this.url.includes('?') ? '&' : '?';
+        const urlWithClientId = `${this.url}${separator}clientId=${clientId}`;
+        
+        this.socket = new SockJS(urlWithClientId);
         this.setupEventListeners();
         this.startHeartbeat();
         await this.waitForClose();

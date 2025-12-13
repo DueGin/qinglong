@@ -7,4 +7,20 @@ export type SockMessageType =
   | 'runSubscriptionEnd'
   | 'reloadSystem'
   | 'updateNodeMirror'
-  | 'updateLinuxMirror';
+  | 'updateLinuxMirror'
+  | 'acquireLock'
+  | 'releaseLock'
+  | 'scriptDeleted'
+  | 'scriptRenamed'
+  | 'scriptUpdated'
+  | 'lockStatus'
+  | 'lockAcquired'
+  | 'lockReleased'
+  | 'lockFailed';
+
+export interface LockInfo {
+  clientId: string;
+  username: string;
+  filePath: string;
+  timestamp: number;
+}

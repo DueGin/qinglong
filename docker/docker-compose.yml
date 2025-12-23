@@ -1,6 +1,6 @@
 services:
   web:
-    image: duegin/qinglong:support-multi-device-login-v2 # 基于 Debian 的版本：whyour/qinglong:debian  
+    image: duegin/qinglong:support-multi-device-login-v2.1 # 基于 Debian 的版本：whyour/qinglong:debian  
     volumes:
       - ./data:/ql/data
     ports:

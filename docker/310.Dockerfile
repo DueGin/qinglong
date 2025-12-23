@@ -1,22 +1,33 @@
 FROM python:3.10-alpine3.18 AS builder
-COPY package.json .npmrc pnpm-lock.yaml /tmp/build/
+
+ENV QL_DIR=/ql
+
+WORKDIR ${QL_DIR}
+
 RUN set -x \
-  && apk update \
-  && apk add nodejs npm git \
+  && apk add --no-cache nodejs npm git build-base \
   && npm i -g pnpm@8.3.1 pm2 ts-node \
-  && cd /tmp/build \
-  && pnpm install --prod
+  && git config --global http.version HTTP/1.1
+
+COPY package.json pnpm-lock.yaml .npmrc ./
+RUN pnpm install --frozen-lockfile
+
+COPY . .
+RUN set -x \
+  && cp -f .env.example .env \
+  && chmod 777 ${QL_DIR}/shell/*.sh \
+  && chmod 777 ${QL_DIR}/docker/*.sh \
+  && pnpm run build:front \
+  && pnpm run build:back \
+  && pnpm prune --prod \
+  && rm -rf ${QL_DIR}/.git
 
 FROM python:3.10-alpine
 
-ARG QL_MAINTAINER="whyour"
-LABEL maintainer="${QL_MAINTAINER}"
-ARG QL_URL=https://github.com/${QL_MAINTAINER}/qinglong.git
-ARG QL_BRANCH=develop
-ARG PYTHON_SHORT_VERSION=3.10
+LABEL maintainer="whyour"
 
 ENV QL_DIR=/ql \
-  QL_BRANCH=${QL_BRANCH} \
+  QL_BRANCH=develop \
   LANG=C.UTF-8 \
   SHELL=/bin/bash \
   PS1="\u@\h:\w \$ "
@@ -56,16 +67,7 @@ RUN set -x \
   && rm -rf /root/.cache \
   && ulimit -c 0
 
-ARG SOURCE_COMMIT
-RUN git clone --depth=1 -b ${QL_BRANCH} ${QL_URL} ${QL_DIR} \
-  && cd ${QL_DIR} \
-  && cp -f .env.example .env \
-  && chmod 777 ${QL_DIR}/shell/*.sh \
-  && chmod 777 ${QL_DIR}/docker/*.sh \
-  && git clone --depth=1 -b ${QL_BRANCH} https://github.com/${QL_MAINTAINER}/qinglong-static.git /static \
-  && mkdir -p ${QL_DIR}/static \
-  && cp -rf /static/* ${QL_DIR}/static \
-  && rm -rf /static
+COPY --from=builder ${QL_DIR} ${QL_DIR}
 
 ENV PNPM_HOME=${QL_DIR}/data/dep_cache/node \
   PYTHON_HOME=${QL_DIR}/data/dep_cache/python3 \
@@ -74,11 +76,9 @@ ENV PNPM_HOME=${QL_DIR}/data/dep_cache/node \
 ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PNPM_HOME}:${PYTHON_HOME}/bin \
   NODE_PATH=/usr/local/bin:/usr/local/lib/node_modules:${PNPM_HOME}/global/5/node_modules \
   PIP_CACHE_DIR=${PYTHON_HOME}/pip \
-  PYTHONPATH=${PYTHON_HOME}:${PYTHON_HOME}/lib/python${PYTHON_SHORT_VERSION}:${PYTHON_HOME}/lib/python${PYTHON_SHORT_VERSION}/site-packages
+  PYTHONPATH=${PYTHON_HOME}:${PYTHON_HOME}/lib/python3.10:${PYTHON_HOME}/lib/python3.10/site-packages
 
 RUN pip3 install --prefix ${PYTHON_HOME} requests
-
-COPY --from=builder /tmp/build/node_modules/. /ql/node_modules/
 
 WORKDIR ${QL_DIR}
 
